@@ -2,9 +2,31 @@ import subprocess
 import os
 import json
 import logging
+import re
 
 
 logger = logging.getLogger("vdnldr.converter")
+
+
+def sanitize_output_basename(name):
+    """Normalize a user-provided filename to a safe Windows-compatible basename."""
+    if not name:
+        return None
+
+    base = name.strip()
+    if not base:
+        return None
+
+    if base.lower().endswith('.mp4'):
+        base = base[:-4]
+
+    base = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', '_', base)
+    base = re.sub(r'\s+', ' ', base).strip(' .')
+
+    if not base:
+        return None
+
+    return base[:120]
 
 
 def build_concat_list(job, status_dict):
@@ -39,7 +61,7 @@ def build_concat_list(job, status_dict):
     return concat_file
 
 
-def convert_to_mp4(job_id, concat_file, output_path, ffmpeg_path=None):
+def convert_to_mp4(job_id, concat_file, output_path, ffmpeg_path=None, output_name=None):
     """
     Convert concatenated .ts segments to MP4 using FFmpeg.
     
@@ -70,8 +92,14 @@ def convert_to_mp4(job_id, concat_file, output_path, ffmpeg_path=None):
 
         logger.info("ffmpeg selected: job_id=%s ffmpeg_path=%s", job_id, ffmpeg_path, extra={"job_id": job_id})
         
-        output_filename = f"{job_id}.mp4"
+        preferred_name = sanitize_output_basename(output_name)
+        output_filename = f"{preferred_name}.mp4" if preferred_name else f"{job_id}.mp4"
         output_file = os.path.join(output_path, output_filename)
+
+        # Avoid clobbering an existing file from another tab/job with same custom name.
+        if os.path.exists(output_file):
+            output_filename = f"{preferred_name or job_id}_{job_id}.mp4"
+            output_file = os.path.join(output_path, output_filename)
         
         cmd = [
             ffmpeg_path,
