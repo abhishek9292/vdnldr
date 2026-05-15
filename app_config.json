@@ -1,0 +1,11 @@
+{
+  "port": 8020,
+  "default_workers": 5,
+  "max_workers": 20,
+  "min_workers": 1,
+  "temp_dir": "downloads",
+  "max_recent_downloads": 2,
+  "segment_timeout": 30,
+  "ffmpeg_check_on_startup": true,
+  "ffmpeg_path": "C:\\ffmpeg-2026-05-13-git-a327bc0561-essentials_build\\bin\\ffmpeg.exe"
+}
