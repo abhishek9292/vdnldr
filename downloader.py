@@ -4,10 +4,41 @@ import os
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 
 logger = logging.getLogger("vdnldr.downloader")
+
+
+def assess_segment_compatibility(segments):
+    """Heuristic warning when segment URIs look non-standard for MP4 conversion."""
+    if not segments:
+        return None
+
+    first_uri = segments[0]
+    parsed = urlparse(first_uri)
+    path_lower = (parsed.path or '').lower()
+    host_lower = (parsed.netloc or '').lower()
+
+    # Typical HLS/fMP4 segment formats are .ts/.m4s/.mp4/.aac.
+    likely_supported_markers = ('.ts', '.m4s', '.mp4', '.aac')
+    suspicious_markers = ('.image', '.png', '.jpg', '.jpeg', '.webp', '.gif')
+
+    has_supported_marker = any(marker in path_lower for marker in likely_supported_markers)
+    has_suspicious_marker = any(marker in path_lower for marker in suspicious_markers)
+    looks_signed_cdn_image = ('tiktokcdn.com' in host_lower and '.image' in path_lower)
+
+    if has_suspicious_marker or looks_signed_cdn_image or not has_supported_marker:
+        return {
+            'is_warning': True,
+            'message': (
+                'This stream uses segment URLs that may be non-standard or protected. '
+                'Convert may fail or produce an unplayable MP4. Consider trying another source/quality.'
+            ),
+            'sample_segment_uri': first_uri
+        }
+
+    return None
 
 
 def infer_resolution_from_variant(variant_uri, bandwidth):

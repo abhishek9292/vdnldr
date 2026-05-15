@@ -225,6 +225,7 @@ def analyze():
         logger.info("Analyze requested for url=%s", url)
 
         variants = downloader.parse_master(url)
+        stream_warning = None
 
         if not variants:
             try:
@@ -236,6 +237,7 @@ def analyze():
                         "bandwidth": 0,
                         "uri": url
                     }]
+                    stream_warning = downloader.assess_segment_compatibility(segments)
                     logger.info("Analyze result: direct media playlist detected, segments=%s", len(segments))
                 else:
                     logger.error("Analyze failed: no video segments found for url=%s", url)
@@ -245,7 +247,7 @@ def analyze():
                 return jsonify({'error': f'Failed to parse M3U8: {str(e)}'}), 400
 
         logger.info("Analyze success: variants=%s for url=%s", len(variants), url)
-        return jsonify({'variants': variants})
+        return jsonify({'variants': variants, 'stream_warning': stream_warning})
     except Exception as e:
         logger.exception("Analyze route exception")
         return jsonify({'error': str(e)}), 400
@@ -467,7 +469,20 @@ def convert():
 
         logger.info("Convert requested: job_id=%s", job_id, extra={"job_id": job_id})
 
-        concat_file = converter.build_concat_list(job, job['status'])
+        concat_file, coverage = converter.build_concat_list(job, job['status'])
+        if coverage.get('included_segments', 0) <= 0:
+            logger.error(
+                "Convert failed: no contiguous downloaded range from segment 0 for job_id=%s",
+                job_id,
+                extra={"job_id": job_id}
+            )
+            return jsonify({
+                'success': False,
+                'filename': None,
+                'error': 'No contiguous segment range available from the start of the stream. Resume download and try again.',
+                'coverage': coverage
+            }), 400
+
         ffmpeg_path = config.get('ffmpeg_path')
         result = converter.convert_to_mp4(job_id, concat_file, config['temp_dir'], ffmpeg_path, output_name)
 
@@ -481,9 +496,11 @@ def convert():
                 })
                 state['recent_downloads'] = recent[:config['max_recent_downloads']]
             save_state()
+            result['coverage'] = coverage
             logger.info("Convert success: job_id=%s filename=%s", job_id, result.get('filename'), extra={"job_id": job_id})
             return jsonify(result)
 
+        result['coverage'] = coverage
         logger.error("Convert failed: job_id=%s error=%s", job_id, result.get('error'), extra={"job_id": job_id})
         return jsonify(result), 400
     except Exception as e:

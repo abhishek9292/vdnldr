@@ -53,6 +53,7 @@ function newTabObject(title = null) {
         workers: 5,
         outputName: '',
         variants: [],
+        streamWarning: null,
         jobId: null,
         segmentStatus: {},
         totalSegments: 0,
@@ -116,6 +117,7 @@ function loadTabsFromStorage() {
                 workers: Number.isInteger(t.workers) ? t.workers : 5,
                 outputName: t.outputName || '',
                 variants: Array.isArray(t.variants) ? t.variants : [],
+                streamWarning: t.streamWarning || null,
                 jobId: t.jobId || null,
                 segmentStatus: t.segmentStatus || {},
                 totalSegments: Number.isInteger(t.totalSegments) ? t.totalSegments : 0,
@@ -313,6 +315,7 @@ function renderActiveTab() {
     renderVariants(tab);
     updateSegmentDisplay(tab);
     renderDetectedNameBadge(tab);
+    renderStreamWarning(tab);
     updateAnalyseButtonState();
 }
 
@@ -324,6 +327,17 @@ function renderDetectedNameBadge(tab) {
     } else {
         $('#detectedNameBadge').text('');
         $('#detectedNameWrap').hide();
+    }
+}
+
+function renderStreamWarning(tab) {
+    const warning = tab && tab.streamWarning;
+    if (warning && warning.message) {
+        $('#streamWarningText').text(warning.message);
+        $('#streamWarningWrap').show();
+    } else {
+        $('#streamWarningText').text('');
+        $('#streamWarningWrap').hide();
     }
 }
 
@@ -504,6 +518,7 @@ function resetTabForNewAnalysis(tab) {
 
     tab.qualityUri = '';
     tab.variants = [];
+    tab.streamWarning = null;
     tab.jobId = null;
     tab.segmentStatus = {};
     tab.totalSegments = 0;
@@ -672,6 +687,7 @@ $(document).ready(() => {
             data: JSON.stringify({ url }),
             success: (response) => {
                 tab.variants = response.variants || [];
+                tab.streamWarning = response.stream_warning || null;
                 tab.qualityUri = '';
                 if (!tab.outputName) {
                     tab.outputName = suggestNameFromUrl(tab.url || '');
